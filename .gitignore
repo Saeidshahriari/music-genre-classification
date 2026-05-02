@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Build
+build/
+dist/
+
+# Secrets and config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Data and artifacts (use DVC, see Phase C)
+data/
+datasets/
+models/
+*.wav
+*.mp3
+*.flac
+*.npy
+*.npz
+*.pkl
+*.h5
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Experiment tracking
+mlruns/
+wandb/
+runs/
+logs/
+tensorboard/
+lightning_logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
