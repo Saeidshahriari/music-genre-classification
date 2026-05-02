@@ -33,19 +33,20 @@ References:
       with torchcodec in our project environment.
 """
 
-import os
 import json
+import os
 import random
+
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
 import torchaudio.transforms as T
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-import seaborn as sns
-import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader, Dataset
 
 # ── Reproducibility ───────────────────────────────────────────────────────────
 # Seed is set immediately after imports and before any random operations.
@@ -60,12 +61,13 @@ if torch.cuda.is_available():
 # Forces deterministic algorithms in cuDNN.
 # Note: full cross-platform reproducibility cannot be guaranteed by PyTorch.
 torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark     = False
+torch.backends.cudnn.benchmark = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PART 1: Mel-Spectrogram Extractor
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class MelSpectrogramExtractor:
     """
@@ -89,15 +91,13 @@ class MelSpectrogramExtractor:
         Yang et al. (2021). TorchAudio. ICASSP.
     """
 
-    def __init__(self, sample_rate=22050, n_fft=2048,
-                 hop_length=512, n_mels=128, target_length=1292):
-        self.sample_rate   = sample_rate
+    def __init__(
+        self, sample_rate=22050, n_fft=2048, hop_length=512, n_mels=128, target_length=1292
+    ):
+        self.sample_rate = sample_rate
         self.target_length = target_length
         self.mel_transform = T.MelSpectrogram(
-            sample_rate=sample_rate,
-            n_fft=n_fft,
-            hop_length=hop_length,
-            n_mels=n_mels
+            sample_rate=sample_rate, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels
         )
 
     def extract(self, filepath):
@@ -115,6 +115,7 @@ class MelSpectrogramExtractor:
         """
         try:
             import soundfile as sf
+
             # I use soundfile here because torchaudio.load caused
             # compatibility issues on my Windows setup with torchcodec.
             # soundfile.read() returns (numpy_array, sample_rate) directly.
@@ -141,7 +142,7 @@ class MelSpectrogramExtractor:
             if t < self.target_length:
                 mel = F.pad(mel, (0, self.target_length - t))
             else:
-                mel = mel[:, :, :self.target_length]
+                mel = mel[:, :, : self.target_length]
 
             return mel
 
@@ -153,6 +154,7 @@ class MelSpectrogramExtractor:
 # ─────────────────────────────────────────────────────────────────────────────
 # PART 2: Dataset
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class GTZANMelDataset(Dataset):
     """
@@ -177,6 +179,7 @@ class GTZANMelDataset(Dataset):
 # ─────────────────────────────────────────────────────────────────────────────
 # PART 3: CNN Architecture
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class GenreCNN(nn.Module):
     """
@@ -232,37 +235,37 @@ class GenreCNN(nn.Module):
     """
 
     def __init__(self, n_mels=128, num_classes=10):
-        super(GenreCNN, self).__init__()
+        super().__init__()
 
         self.conv_block1 = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2)
+            nn.MaxPool2d(2, 2),
         )
         self.conv_block2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2)
+            nn.MaxPool2d(2, 2),
         )
         self.conv_block3 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2)
+            nn.MaxPool2d(2, 2),
         )
         self.conv_block4 = nn.Sequential(
             nn.Conv2d(128, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2)
+            nn.MaxPool2d(2, 2),
         )
 
         # Reduces any spatial size to fixed (4, 4)
         self.adaptive_pool = nn.AdaptiveAvgPool2d((4, 4))
-        self.fc1     = nn.Linear(128 * 4 * 4, 256)
-        self.fc2     = nn.Linear(256, num_classes)
+        self.fc1 = nn.Linear(128 * 4 * 4, 256)
+        self.fc2 = nn.Linear(256, num_classes)
         self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
@@ -280,6 +283,7 @@ class GenreCNN(nn.Module):
 # PART 4: Analysis Utilities
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def analyze_confusion_matrix(cm, genres):
     """
     Automatically computes genre accuracy and confused pairs
@@ -296,17 +300,16 @@ def analyze_confusion_matrix(cm, genres):
     # Per-genre accuracy from diagonal
     per_genre_acc = {}
     for i, genre in enumerate(genres):
-        total   = cm[i].sum()
+        total = cm[i].sum()
         correct = cm[i][i]
         per_genre_acc[genre] = correct / total if total > 0 else 0
 
-    sorted_genres = sorted(per_genre_acc.items(),
-                            key=lambda x: x[1], reverse=True)
+    sorted_genres = sorted(per_genre_acc.items(), key=lambda x: x[1], reverse=True)
 
     print("\n  Per-genre accuracy (best to worst):")
     for genre, acc in sorted_genres:
         bar = "█" * int(acc * 20)
-        print(f"    {genre:12s}: {acc*100:5.1f}%  {bar}")
+        print(f"    {genre:12s}: {acc * 100:5.1f}%  {bar}")
 
     # Most confused pairs from off-diagonal
     print("\n  Top 5 most confused pairs:")
@@ -319,20 +322,28 @@ def analyze_confusion_matrix(cm, genres):
 
     confused.sort(reverse=True)
     for count, true_g, pred_g in confused[:5]:
-        print(f"    {true_g:12s} misclassified as {pred_g:12s}: "
-              f"{count} tracks")
+        print(f"    {true_g:12s} misclassified as {pred_g:12s}: {count} tracks")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PART 5: CNN Workflow
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class CNNWorkflow:
     def __init__(self, dataset_path):
         self.dataset_path = dataset_path
         self.genres = [
-            "blues", "classical", "country", "disco", "hiphop",
-            "jazz", "metal", "pop", "reggae", "rock"
+            "blues",
+            "classical",
+            "country",
+            "disco",
+            "hiphop",
+            "jazz",
+            "metal",
+            "pop",
+            "reggae",
+            "rock",
         ]
         self.extractor = MelSpectrogramExtractor()
 
@@ -352,9 +363,7 @@ class CNNWorkflow:
             count = 0
             for filename in os.listdir(genre_folder):
                 if filename.endswith(".wav"):
-                    mel = self.extractor.extract(
-                        os.path.join(genre_folder, filename)
-                    )
+                    mel = self.extractor.extract(os.path.join(genre_folder, filename))
                     if mel is not None:
                         spectrograms.append(mel)
                         labels.append(genre_idx)
@@ -368,12 +377,11 @@ class CNNWorkflow:
     def visualize_spectrogram(self, spectrogram, genre_name):
         """Shows one mel-spectrogram — useful for the report."""
         plt.figure(figsize=(12, 4))
-        plt.imshow(spectrogram.squeeze().numpy(),
-                   aspect='auto', origin='lower', cmap='viridis')
-        plt.colorbar(label='Log Energy')
-        plt.title(f'Log Mel-Spectrogram — {genre_name}')
-        plt.xlabel('Time Frames')
-        plt.ylabel('Mel Frequency Bands')
+        plt.imshow(spectrogram.squeeze().numpy(), aspect="auto", origin="lower", cmap="viridis")
+        plt.colorbar(label="Log Energy")
+        plt.title(f"Log Mel-Spectrogram — {genre_name}")
+        plt.xlabel("Time Frames")
+        plt.ylabel("Mel Frequency Bands")
         plt.tight_layout()
         plt.show()
 
@@ -381,19 +389,17 @@ class CNNWorkflow:
         """Plots confusion matrix and returns it for analysis."""
         cm = confusion_matrix(y_true, predictions)
         plt.figure(figsize=(12, 8))
-        sns.heatmap(cm, annot=True, fmt='d',
-                    xticklabels=self.genres,
-                    yticklabels=self.genres,
-                    cmap='Blues')
-        plt.xlabel('Predicted Genre')
-        plt.ylabel('True Genre')
+        sns.heatmap(
+            cm, annot=True, fmt="d", xticklabels=self.genres, yticklabels=self.genres, cmap="Blues"
+        )
+        plt.xlabel("Predicted Genre")
+        plt.ylabel("True Genre")
         plt.title(title)
         plt.tight_layout()
         plt.show()
         return cm
 
-    def plot_training_curves(self, train_losses, train_accs,
-                             val_losses, val_accs):
+    def plot_training_curves(self, train_losses, train_accs, val_losses, val_accs):
         """
         Plots training and validation curves together.
         Gap between train and val accuracy indicates overfitting.
@@ -401,25 +407,23 @@ class CNNWorkflow:
         epochs = range(1, len(train_losses) + 1)
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-        axes[0].plot(epochs, train_losses, 'b-', label='Train Loss')
-        axes[0].plot(epochs, val_losses,   'r--', label='Val Loss')
-        axes[0].set_title('Loss over Epochs')
-        axes[0].set_xlabel('Epoch')
-        axes[0].set_ylabel('CrossEntropy Loss')
+        axes[0].plot(epochs, train_losses, "b-", label="Train Loss")
+        axes[0].plot(epochs, val_losses, "r--", label="Val Loss")
+        axes[0].set_title("Loss over Epochs")
+        axes[0].set_xlabel("Epoch")
+        axes[0].set_ylabel("CrossEntropy Loss")
         axes[0].legend()
         axes[0].grid(True)
 
-        axes[1].plot(epochs, [a*100 for a in train_accs],
-                     'b-', label='Train Acc')
-        axes[1].plot(epochs, [a*100 for a in val_accs],
-                     'r--', label='Val Acc')
-        axes[1].set_title('Accuracy over Epochs')
-        axes[1].set_xlabel('Epoch')
-        axes[1].set_ylabel('Accuracy (%)')
+        axes[1].plot(epochs, [a * 100 for a in train_accs], "b-", label="Train Acc")
+        axes[1].plot(epochs, [a * 100 for a in val_accs], "r--", label="Val Acc")
+        axes[1].set_title("Accuracy over Epochs")
+        axes[1].set_xlabel("Epoch")
+        axes[1].set_ylabel("Accuracy (%)")
         axes[1].legend()
         axes[1].grid(True)
 
-        plt.suptitle('CNN Training Curves')
+        plt.suptitle("CNN Training Curves")
         plt.tight_layout()
         plt.show()
 
@@ -449,29 +453,25 @@ class CNNWorkflow:
         # Step 2: Stratified train/test split
         indices = list(range(len(spectrograms)))
         train_idx, test_idx = train_test_split(
-            indices, test_size=0.3,
-            random_state=SEED, stratify=labels
+            indices, test_size=0.3, random_state=SEED, stratify=labels
         )
 
-        train_specs  = [spectrograms[i] for i in train_idx]
-        test_specs   = [spectrograms[i] for i in test_idx]
+        train_specs = [spectrograms[i] for i in train_idx]
+        test_specs = [spectrograms[i] for i in test_idx]
         train_labels = [labels[i] for i in train_idx]
-        test_labels  = [labels[i] for i in test_idx]
+        test_labels = [labels[i] for i in test_idx]
 
         # Step 3: Further split train → train/val
         tr_idx, val_idx = train_test_split(
-            list(range(len(train_specs))),
-            test_size=0.2,
-            random_state=SEED,
-            stratify=train_labels
+            list(range(len(train_specs))), test_size=0.2, random_state=SEED, stratify=train_labels
         )
 
-        val_specs    = [train_specs[i] for i in val_idx]
-        val_labels   = [train_labels[i] for i in val_idx]
-        train_specs  = [train_specs[i] for i in tr_idx]
+        val_specs = [train_specs[i] for i in val_idx]
+        val_labels = [train_labels[i] for i in val_idx]
+        train_specs = [train_specs[i] for i in tr_idx]
         train_labels = [train_labels[i] for i in tr_idx]
 
-        print(f"\nDataset split:")
+        print("\nDataset split:")
         print(f"  Train : {len(train_specs)} tracks")
         print(f"  Val   : {len(val_specs)} tracks")
         print(f"  Test  : {len(test_specs)} tracks")
@@ -486,66 +486,57 @@ class CNNWorkflow:
             GTZANMelDataset(train_specs, train_labels),
             batch_size=batch_size,
             shuffle=True,
-            generator=loader_generator
+            generator=loader_generator,
         )
         val_loader = DataLoader(
-            GTZANMelDataset(val_specs, val_labels),
-            batch_size=batch_size,
-            shuffle=False
+            GTZANMelDataset(val_specs, val_labels), batch_size=batch_size, shuffle=False
         )
         test_loader = DataLoader(
-            GTZANMelDataset(test_specs, test_labels),
-            batch_size=batch_size,
-            shuffle=False
+            GTZANMelDataset(test_specs, test_labels), batch_size=batch_size, shuffle=False
         )
 
         # Step 5: Initialize model
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"\nTraining CNN on: {device}")
 
-        model     = GenreCNN(n_mels=128, num_classes=10).to(device)
+        model = GenreCNN(n_mels=128, num_classes=10).to(device)
         criterion = nn.CrossEntropyLoss()
 
         # Adam with L2 weight decay for regularization
         # Reference: Kingma & Ba (2015). Adam. ICLR.
-        optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=learning_rate,
-            weight_decay=1e-4
-        )
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 
         # ReduceLROnPlateau: halves lr when val loss stops improving
         # Reference: PyTorch lr_scheduler documentation
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', patience=5, factor=0.5
+            optimizer, mode="min", patience=5, factor=0.5
         )
 
         # Step 6: Training loop
         train_losses, train_accs = [], []
-        val_losses,   val_accs   = [], []
+        val_losses, val_accs = [], []
         best_val_acc = 0.0
 
         print(f"\nTraining CNN for {epochs} epochs...")
 
         for epoch in range(epochs):
-
             # Training phase
             model.train()
             t_loss, correct, total = 0, 0, 0
             for bx, by in train_loader:
                 bx, by = bx.to(device), by.to(device)
-                out  = model(bx)
+                out = model(bx)
                 loss = criterion(out, by)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                t_loss  += loss.item()
-                _, pred  = torch.max(out, 1)
+                t_loss += loss.item()
+                _, pred = torch.max(out, 1)
                 correct += (pred == by).sum().item()
-                total   += by.size(0)
+                total += by.size(0)
 
             avg_t_loss = t_loss / len(train_loader)
-            t_acc      = correct / total
+            t_acc = correct / total
             train_losses.append(avg_t_loss)
             train_accs.append(t_acc)
 
@@ -555,15 +546,15 @@ class CNNWorkflow:
             with torch.no_grad():
                 for bx, by in val_loader:
                     bx, by = bx.to(device), by.to(device)
-                    out    = model(bx)
-                    loss   = criterion(out, by)
+                    out = model(bx)
+                    loss = criterion(out, by)
                     v_loss += loss.item()
                     _, pred = torch.max(out, 1)
                     v_correct += (pred == by).sum().item()
-                    v_total   += by.size(0)
+                    v_total += by.size(0)
 
             avg_v_loss = v_loss / len(val_loader)
-            v_acc      = v_correct / v_total
+            v_acc = v_correct / v_total
             val_losses.append(avg_v_loss)
             val_accs.append(v_acc)
 
@@ -574,26 +565,23 @@ class CNNWorkflow:
                 torch.save(model.state_dict(), "best_cnn_model.pth")
 
             if (epoch + 1) % 5 == 0:
-                print(f"  Epoch [{epoch+1:2d}/{epochs}] "
-                      f"Train Loss: {avg_t_loss:.4f} | "
-                      f"Train Acc: {t_acc*100:.1f}% | "
-                      f"Val Acc: {v_acc*100:.1f}%")
+                print(
+                    f"  Epoch [{epoch + 1:2d}/{epochs}] "
+                    f"Train Loss: {avg_t_loss:.4f} | "
+                    f"Train Acc: {t_acc * 100:.1f}% | "
+                    f"Val Acc: {v_acc * 100:.1f}%"
+                )
 
         # Step 7: Plot curves
-        self.plot_training_curves(
-            train_losses, train_accs,
-            val_losses, val_accs
-        )
+        self.plot_training_curves(train_losses, train_accs, val_losses, val_accs)
 
         # Step 8: Load best model
         # map_location ensures compatibility across CPU/GPU
         # weights_only=True is PyTorch best practice for safe loading
         # Reference: PyTorch save/load tutorial
-        print(f"\nLoading best model (val acc: {best_val_acc*100:.1f}%)")
+        print(f"\nLoading best model (val acc: {best_val_acc * 100:.1f}%)")
         model.load_state_dict(
-            torch.load("best_cnn_model.pth",
-                       map_location=device,
-                       weights_only=True)
+            torch.load("best_cnn_model.pth", map_location=device, weights_only=True)
         )
         model.eval()
 
@@ -611,14 +599,10 @@ class CNNWorkflow:
         print(f"\nCNN Test Accuracy: {cnn_acc * 100:.2f}%")
 
         print("\nPer-Genre Classification Report:")
-        print(classification_report(
-            all_labels, all_preds,
-            target_names=self.genres
-        ))
+        print(classification_report(all_labels, all_preds, target_names=self.genres))
 
         cm = self.visualize_confusion_matrix(
-            all_labels, all_preds,
-            title="Confusion Matrix - CNN (Mel-Spectrogram)"
+            all_labels, all_preds, title="Confusion Matrix - CNN (Mel-Spectrogram)"
         )
 
         # Automatic analysis — no hardcoded claims
@@ -630,6 +614,7 @@ class CNNWorkflow:
 # ─────────────────────────────────────────────────────────────────────────────
 # PART 6: Final Comparison
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def print_final_comparison(cnn_acc):
     """
@@ -645,7 +630,7 @@ def print_final_comparison(cnn_acc):
         svm_acc = "N/A"
         mlp_acc = "N/A"
     else:
-        with open(results_path, "r") as f:
+        with open(results_path) as f:
             results = json.load(f)
         svm_acc = f"{results['svm_accuracy']:.2f}%"
         mlp_acc = f"{results['mlp_accuracy']:.2f}%"
@@ -655,7 +640,7 @@ def print_final_comparison(cnn_acc):
     print("=" * 55)
     print(f"  Approach 1a — SVM (MFCC)           : {svm_acc}")
     print(f"  Approach 1b — MLP (MFCC)           : {mlp_acc}")
-    print(f"  Approach 2  — CNN (Mel-Spectrogram) : {cnn_acc*100:.2f}%")
+    print(f"  Approach 2  — CNN (Mel-Spectrogram) : {cnn_acc * 100:.2f}%")
     print("=" * 55)
     print("\nContext from referenced papers:")
     print("  Choi et al. (2017) and van den Oord et al. (2013) both")
@@ -664,7 +649,7 @@ def print_final_comparison(cnn_acc):
     print("  The project guide (Section 7) states CNN/CRNN on GTZAN")
     print("  'may reach 80-85% accuracy, potentially higher with")
     print("  careful tuning' (Deligiannis et al., VUB 2026).")
-    print(f"  Our CNN result of {cnn_acc*100:.2f}% is consistent with this expectation.")
+    print(f"  Our CNN result of {cnn_acc * 100:.2f}% is consistent with this expectation.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -676,9 +661,7 @@ if __name__ == "__main__":
 
     workflow = CNNWorkflow(path)
     model, cnn_accuracy, predictions, true_labels = workflow.run_cnn(
-        epochs=50,
-        batch_size=16,
-        learning_rate=0.001
+        epochs=50, batch_size=16, learning_rate=0.001
     )
 
     print_final_comparison(cnn_accuracy)

@@ -20,21 +20,22 @@ References:
       with torchcodec in our project environment.
 """
 
-import os
 import json
+import os
 import random
+
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
 import torchaudio
-from sklearn.svm import SVC
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+from torch.utils.data import DataLoader, Dataset
 
 # ── Reproducibility ───────────────────────────────────────────────────────────
 # Seed is set immediately after imports and before any random operations.
@@ -49,12 +50,13 @@ if torch.cuda.is_available():
 # Forces deterministic algorithms in cuDNN.
 # Note: full cross-platform reproducibility cannot be guaranteed by PyTorch.
 torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark     = False
+torch.backends.cudnn.benchmark = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PART 1: Feature Extractor
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class MusicGenreClassification:
     """
@@ -89,6 +91,7 @@ class MusicGenreClassification:
         """
         try:
             import soundfile as sf
+
             # I use soundfile instead of torchaudio.load because torchaudio
             # caused torchcodec errors on my Windows machine. soundfile.read()
             # returns (numpy_array, sample_rate) and works reliably here.
@@ -140,10 +143,10 @@ class MusicGenreClassification:
             # The project guide says "typically 13 or 20" — both are valid.
             n_mfcc=20,
             melkwargs={
-                "n_fft": 1024,       # FFT window size (per project guide)
-                "hop_length": 512,   # frame step
-                "n_mels": 128        # mel frequency bands
-            }
+                "n_fft": 1024,  # FFT window size (per project guide)
+                "hop_length": 512,  # frame step
+                "n_mels": 128,  # mel frequency bands
+            },
         )
         self.MFCC = mfcc_transform(self.waveform)
         return self.MFCC
@@ -170,6 +173,7 @@ class MusicGenreClassification:
 # PART 2: PyTorch Dataset
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class GTZANDataset(Dataset):
     """
     Wraps MFCC features and labels for PyTorch DataLoader.
@@ -194,6 +198,7 @@ class GTZANDataset(Dataset):
 # PART 3: MLP Architecture
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class GenreMLP(nn.Module):
     """
     Simple MLP for genre classification from MFCC features.
@@ -210,10 +215,10 @@ class GenreMLP(nn.Module):
     """
 
     def __init__(self, input_size=20, num_classes=10):
-        super(GenreMLP, self).__init__()
-        self.fc1    = nn.Linear(input_size, 128)
-        self.fc2    = nn.Linear(128, 64)
-        self.fc3    = nn.Linear(64, 32)
+        super().__init__()
+        self.fc1 = nn.Linear(input_size, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 32)
         self.output = nn.Linear(32, num_classes)
         self.dropout = nn.Dropout(p=0.3)
 
@@ -228,12 +233,21 @@ class GenreMLP(nn.Module):
 # PART 4: Workflow
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class Workflow:
     def __init__(self, dataset_path):
         self.dataset_path = dataset_path
         self.genres = [
-            "blues", "classical", "country", "disco", "hiphop",
-            "jazz", "metal", "pop", "reggae", "rock"
+            "blues",
+            "classical",
+            "country",
+            "disco",
+            "hiphop",
+            "jazz",
+            "metal",
+            "pop",
+            "reggae",
+            "rock",
         ]
 
     def extract_all_features(self):
@@ -269,12 +283,11 @@ class Workflow:
         """Plots confusion matrix. Rows=true genre, Columns=predicted genre."""
         cm = confusion_matrix(y_true, predictions)
         plt.figure(figsize=(12, 8))
-        sns.heatmap(cm, annot=True, fmt='d',
-                    xticklabels=self.genres,
-                    yticklabels=self.genres,
-                    cmap='Blues')
-        plt.xlabel('Predicted Genre')
-        plt.ylabel('True Genre')
+        sns.heatmap(
+            cm, annot=True, fmt="d", xticklabels=self.genres, yticklabels=self.genres, cmap="Blues"
+        )
+        plt.xlabel("Predicted Genre")
+        plt.ylabel("True Genre")
         plt.title(title)
         plt.tight_layout()
         plt.show()
@@ -294,12 +307,11 @@ class Workflow:
             correct = cm[i][i]
             per_genre_acc[genre] = correct / total if total > 0 else 0
 
-        sorted_genres = sorted(per_genre_acc.items(),
-                                key=lambda x: x[1], reverse=True)
+        sorted_genres = sorted(per_genre_acc.items(), key=lambda x: x[1], reverse=True)
 
         print("  Genre accuracy (best to worst):")
         for genre, acc in sorted_genres:
-            print(f"    {genre:12s}: {acc*100:.1f}%")
+            print(f"    {genre:12s}: {acc * 100:.1f}%")
 
         # Most confused pairs from off-diagonal
         print("\n  Most confused genre pairs:")
@@ -308,9 +320,7 @@ class Workflow:
         for i in range(n):
             for j in range(n):
                 if i != j and cm[i][j] > 0:
-                    confused_pairs.append((cm[i][j],
-                                           self.genres[i],
-                                           self.genres[j]))
+                    confused_pairs.append((cm[i][j], self.genres[i], self.genres[j]))
 
         confused_pairs.sort(reverse=True)
         for count, true_g, pred_g in confused_pairs[:5]:
@@ -333,23 +343,31 @@ class Workflow:
             gamma='scale'  : 1 / (n_features * X.var())
         """
         X_train_sc = scaler.transform(X_train)
-        X_test_sc  = scaler.transform(X_test)
+        X_test_sc = scaler.transform(X_test)
 
         print("\nTraining SVM model...")
-        svm_model = SVC(kernel='rbf', C=10.0, gamma='scale')
+        svm_model = SVC(kernel="rbf", C=10.0, gamma="scale")
         svm_model.fit(X_train_sc, y_train)
 
         predictions = svm_model.predict(X_test_sc)
         accuracy = accuracy_score(y_test, predictions)
         print(f"SVM Test Accuracy: {accuracy * 100:.2f}%")
 
-        cm = self.visualize_confusion_matrix(y_test, predictions,
-                                              "Confusion Matrix - SVM (MFCC)")
+        cm = self.visualize_confusion_matrix(y_test, predictions, "Confusion Matrix - SVM (MFCC)")
         self.analyze_confusion_matrix(cm, "SVM")
         return svm_model, predictions, accuracy
 
-    def run_mlp(self, X_train, X_test, y_train, y_test, scaler,
-                epochs=100, batch_size=32, learning_rate=0.001):
+    def run_mlp(
+        self,
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+        scaler,
+        epochs=100,
+        batch_size=32,
+        learning_rate=0.001,
+    ):
         """
         Trains MLP with Adam optimizer and CrossEntropyLoss.
 
@@ -362,23 +380,25 @@ class Workflow:
         Reference: Kingma & Ba (2015). Adam. ICLR.
         """
         X_train_sc = scaler.transform(X_train)
-        X_test_sc  = scaler.transform(X_test)
+        X_test_sc = scaler.transform(X_test)
 
         # Local generator ensures reproducibility even if run_mlp()
         # is called multiple times in the same process or notebook.
         loader_generator = torch.Generator()
         loader_generator.manual_seed(SEED)
 
-        train_loader = DataLoader(GTZANDataset(X_train_sc, y_train),
-                                  batch_size=batch_size,
-                                  shuffle=True,
-                                  generator=loader_generator)
-        test_loader  = DataLoader(GTZANDataset(X_test_sc, y_test),
-                                  batch_size=batch_size,
-                                  shuffle=False)
+        train_loader = DataLoader(
+            GTZANDataset(X_train_sc, y_train),
+            batch_size=batch_size,
+            shuffle=True,
+            generator=loader_generator,
+        )
+        test_loader = DataLoader(
+            GTZANDataset(X_test_sc, y_test), batch_size=batch_size, shuffle=False
+        )
 
-        device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model     = GenreMLP(input_size=X_train.shape[1]).to(device)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = GenreMLP(input_size=X_train.shape[1]).to(device)
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -391,7 +411,7 @@ class Workflow:
 
             for bx, by in train_loader:
                 bx, by = bx.to(device), by.to(device)
-                out  = model(bx)
+                out = model(bx)
                 loss = criterion(out, by)
                 optimizer.zero_grad()
                 loss.backward()
@@ -399,17 +419,19 @@ class Workflow:
                 total_loss += loss.item()
                 _, pred = torch.max(out, 1)
                 correct += (pred == by).sum().item()
-                total   += by.size(0)
+                total += by.size(0)
 
             avg_loss = total_loss / len(train_loader)
-            acc      = correct / total
+            acc = correct / total
             train_losses.append(avg_loss)
             train_accs.append(acc)
 
             if (epoch + 1) % 10 == 0:
-                print(f"  Epoch [{epoch+1:3d}/{epochs}] "
-                      f"Loss: {avg_loss:.4f} | "
-                      f"Train Acc: {acc*100:.2f}%")
+                print(
+                    f"  Epoch [{epoch + 1:3d}/{epochs}] "
+                    f"Loss: {avg_loss:.4f} | "
+                    f"Train Acc: {acc * 100:.2f}%"
+                )
 
         # Plot training curves
         self._plot_curves(train_losses, train_accs)
@@ -427,8 +449,7 @@ class Workflow:
         accuracy = accuracy_score(all_labels, all_preds)
         print(f"\nMLP Test Accuracy: {accuracy * 100:.2f}%")
 
-        cm = self.visualize_confusion_matrix(all_labels, all_preds,
-                                              "Confusion Matrix - MLP (MFCC)")
+        cm = self.visualize_confusion_matrix(all_labels, all_preds, "Confusion Matrix - MLP (MFCC)")
         self.analyze_confusion_matrix(cm, "MLP")
         return model, all_preds, all_labels, accuracy
 
@@ -437,19 +458,19 @@ class Workflow:
         epochs = range(1, len(losses) + 1)
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
-        ax1.plot(epochs, losses, 'b-', linewidth=2)
-        ax1.set_title('Training Loss')
-        ax1.set_xlabel('Epoch')
-        ax1.set_ylabel('CrossEntropy Loss')
+        ax1.plot(epochs, losses, "b-", linewidth=2)
+        ax1.set_title("Training Loss")
+        ax1.set_xlabel("Epoch")
+        ax1.set_ylabel("CrossEntropy Loss")
         ax1.grid(True)
 
-        ax2.plot(epochs, [a * 100 for a in accuracies], 'g-', linewidth=2)
-        ax2.set_title('Training Accuracy')
-        ax2.set_xlabel('Epoch')
-        ax2.set_ylabel('Accuracy (%)')
+        ax2.plot(epochs, [a * 100 for a in accuracies], "g-", linewidth=2)
+        ax2.set_title("Training Accuracy")
+        ax2.set_xlabel("Epoch")
+        ax2.set_ylabel("Accuracy (%)")
         ax2.grid(True)
 
-        plt.suptitle('MLP Training Curves')
+        plt.suptitle("MLP Training Curves")
         plt.tight_layout()
         plt.show()
 
@@ -470,10 +491,7 @@ class Workflow:
         # Stratified split: balanced genres in both sets
         # Reference: Tzanetakis & Cook (2002).
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y,
-            test_size=0.3,
-            random_state=SEED,
-            stratify=y
+            X, y, test_size=0.3, random_state=SEED, stratify=y
         )
 
         # Fit scaler on training data only — prevents data leakage
@@ -482,14 +500,10 @@ class Workflow:
         scaler.fit(X_train)
 
         # Run SVM
-        _, svm_preds, svm_acc = self.run_svm(
-            X_train, X_test, y_train, y_test, scaler
-        )
+        _, svm_preds, svm_acc = self.run_svm(X_train, X_test, y_train, y_test, scaler)
 
         # Run MLP
-        _, mlp_preds, _, mlp_acc = self.run_mlp(
-            X_train, X_test, y_train, y_test, scaler
-        )
+        _, mlp_preds, _, mlp_acc = self.run_mlp(X_train, X_test, y_train, y_test, scaler)
 
         # Print comparison
         print("\n" + "=" * 50)
@@ -501,10 +515,7 @@ class Workflow:
 
         # Save results to JSON so Approach 2 can load them
         # This avoids hardcoding accuracy values
-        results = {
-            "svm_accuracy": round(svm_acc * 100, 2),
-            "mlp_accuracy": round(mlp_acc * 100, 2)
-        }
+        results = {"svm_accuracy": round(svm_acc * 100, 2), "mlp_accuracy": round(mlp_acc * 100, 2)}
         with open("approach1_results.json", "w") as f:
             json.dump(results, f, indent=4)
 

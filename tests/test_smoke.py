@@ -1,4 +1,5 @@
 """Smoke test to verify the package imports correctly."""
+
 import music_genre
 
 

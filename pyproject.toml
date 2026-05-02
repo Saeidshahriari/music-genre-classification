@@ -49,13 +49,21 @@ select = [
     "E",    # pycodestyle errors
     "W",    # pycodestyle warnings
     "F",    # pyflakes
-    "I",    # isort
-    "B",    # flake8-bugbear
-    "UP",   # pyupgrade
+    "I",    # isort (import sorting)
+    "B",    # flake8-bugbear (real bugs)
+    "UP",   # pyupgrade (modern Python syntax)
     "N",    # pep8-naming
     "SIM",  # flake8-simplify
 ]
-ignore = ["E501"]  # line length handled by formatter
+ignore = [
+    "E501",   # line length handled by formatter
+    "N803",   # allow uppercase X in function args (ML convention)
+    "N806",   # allow uppercase X in variables (ML convention)
+    "N812",   # allow F, T as imports (PyTorch convention)
+]
+
+[tool.ruff.lint.pep8-naming]
+extend-ignore-names = ["transform_MFCC", "*_MFCC", "*_CNN", "*_MLP", "*_SVM"]
 
 [tool.ruff.format]
 quote-style = "double"
