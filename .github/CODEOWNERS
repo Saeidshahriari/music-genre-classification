@@ -1,0 +1,6 @@
+# Default owner for everything
+*       @Saeidshahriari
+
+# Specific paths
+/src/music_genre/data/      @Saeidshahriari
+/.github/                   @Saeidshahriari
