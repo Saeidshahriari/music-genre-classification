@@ -15,8 +15,8 @@ Classify audio tracks into musical genres using deep learning on log-mel spectro
 
 ## Team
 - Saeid Shahriari ([@Saeidshahriari](https://github.com/Saeidshahriari))
-- Elie [last name] ([@handle])
-- [Third member] ([@handle])
+- Elie
+- Mykhailo
 
 ## Quickstart
 
